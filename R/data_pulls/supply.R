@@ -1,4 +1,5 @@
 library(tidyverse)
 library(eia)
-library(httr2)
-library(readxl)
+library(fredr)
+
+source("R/setup.R")
