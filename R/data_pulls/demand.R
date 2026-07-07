@@ -72,7 +72,7 @@ degree_days_daily <- bind_rows(hdd_daily, cdd_daily, hdd_gas_daily)
 
 # Aggregate to weekly (week ending Friday, matching EIA storage report convention)
 degree_days_weekly <- degree_days_daily |>
-  mutate(week_ending = ceiling_date(date, unit = "week", week_start = 5) - 1) |>
+  mutate(week_ending = ceiling_date(date, unit = "week", week_start = 6) - 1) |>
   group_by(week_ending, region, type, weight) |>
   summarise(value = sum(value, na.rm = TRUE), .groups = "drop")
 
