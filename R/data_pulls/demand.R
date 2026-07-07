@@ -4,6 +4,10 @@ library(fredr)
 
 source("~/NYMEXCrystalBall/R/data_pulls/setup.R")
 
+# =====================================================================
+# ### WEATHER (Daily HDD/CDD population-weighted, HDD gas-weighted) ###
+# =====================================================================
+
 base_url <- "https://ftp.cpc.ncep.noaa.gov/htdocs/degree_days/weighted/daily_data"
 
 region_map <- c(
@@ -74,3 +78,38 @@ degree_days_weekly <- degree_days_daily |>
 
 saveRDS(degree_days_daily,  "data/raw/degree_days_daily.rds")
 saveRDS(degree_days_weekly, "data/raw/degree_days_weekly.rds")
+
+# =====================================================================
+# ### MONTHLY US CONSUMPTION BY SECTOR ###
+# =====================================================================
+
+pull_ng_consumption <- function() {
+  sectors <- c(
+    total          = "VC0",
+    residential    = "VRS",
+    commercial     = "VCS",
+    industrial     = "VIN",
+    electric_power = "VEU"
+  )
+  
+  map_dfr(names(sectors), function(sector) {
+    eia_data(
+      dir      = "natural-gas/cons/sum",
+      data     = "value",
+      facets   = list(duoarea = "NUS", process = sectors[[sector]]),
+      freq     = "monthly",
+      start    = "2000-01"
+    ) |>
+      mutate(
+        sector = sector,
+        date   = as.Date(paste0(period, "-01")),
+        value  = as.numeric(value)
+      )
+  }) |>
+    select(date, sector, value, units) |>
+    arrange(sector, date)
+}
+
+consumption_clean <- pull_ng_consumption()
+
+saveRDS(consumption_clean, "data/raw/ng_consumption.rds")
