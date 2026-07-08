@@ -22,6 +22,24 @@ spot_daily <- pull_spot_daily()
 saveRDS(spot_daily, "data/raw/spot_daily.rds")
 
 # ============================================================
+# ### DAILY NYMEX C1 FUTURES PRICE (NG=F) ###
+# ============================================================
+
+library(tidyquant)
+
+pull_ng_futures_daily <- function() {
+  tq_get(
+    "NG=F",
+    from = "2000-01-01",
+    to   = Sys.Date()
+  ) |>
+    select(date, c1_price = close)
+}
+
+ng_futures_daily <- pull_ng_futures_daily()
+
+saveRDS(ng_futures_daily, "data/raw/ng_futures_daily.rds")
+# ============================================================
 # ### MONTHLY FRONT-MONTH FUTURES PRICES ###
 # ============================================================
 

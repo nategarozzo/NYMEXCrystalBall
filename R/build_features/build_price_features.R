@@ -1,7 +1,7 @@
 # ============================================================
 # build_price_features.R
 # Price-based features for NYMEXCrystalBall
-# Inputs: spot_daily.rds, ng_weekly_futures_curve.rds
+# Inputs: ng_futures_daily.rds, ng_weekly_futures_curve.rds
 # Output: data/features/price_features.rds
 # ============================================================
 
@@ -12,18 +12,18 @@ library(fredr)
 
 source("R/data_pulls/setup.R")
 
-spot_daily   <- readRDS("data/raw/spot_daily.rds")
-weekly_curve <- readRDS("data/raw/ng_weekly_futures_curve.rds")
+ng_futures_daily <- readRDS("data/raw/ng_futures_daily.rds")
+weekly_curve     <- readRDS("data/raw/ng_weekly_futures_curve.rds")
 
 # ============================================================
-# ### STEP 1: ALIGN SPOT PRICE TO WEEKLY (FRIDAY CLOSE) ###
+# ### STEP 1: ALIGN C1 PRICE TO WEEKLY (FRIDAY CLOSE) ###
 # ============================================================
 
-# Take the last available price on or before each Friday
+# Take the last available C1 price on or before each Friday
 # If Friday is a holiday, use Thursday's close
 
-spot_weekly <- spot_daily |>
-  filter(!is.na(spot_price)) |>
+c1_weekly <- ng_futures_daily |>
+  filter(!is.na(c1_price)) |>
   mutate(
     week_ending = ceiling_date(date, unit = "week", week_start = 6) - 1
   ) |>
@@ -31,10 +31,10 @@ spot_weekly <- spot_daily |>
   arrange(desc(date)) |>
   slice(1) |>
   ungroup() |>
-  select(week_ending, spot_price)
+  select(week_ending, c1_price)
 
 # ============================================================
-# ### STEP 2: LOG REAL SPOT PRICE ###
+# ### STEP 2: LOG REAL C1 PRICE ###
 # ============================================================
 
 cpi <- fredr_series_observations(
@@ -43,19 +43,24 @@ cpi <- fredr_series_observations(
   frequency         = "m"
 ) |>
   mutate(year_month = floor_date(date, "month")) |>
-  select(year_month, cpi = value)
+  select(year_month, cpi = value) |>
+  # Extend to current month so forward-fill covers recent weeks
+  complete(year_month = seq(min(year_month),
+                            floor_date(Sys.Date(), "month"),
+                            by = "month")) |>
+  fill(cpi, .direction = "down")
 
-price_features <- spot_weekly |>
+price_features <- c1_weekly |>
   mutate(year_month = floor_date(week_ending, "month")) |>
   left_join(cpi, by = "year_month") |>
   mutate(
-    # Feature 1: log real price (deflated by CPI)
-    log_real_price = log(spot_price / cpi * 100),
+    # Feature 1: log real C1 price (deflated by CPI)
+    log_real_price = log(c1_price / cpi * 100),
     
-    # Feature 12: log price lagged 1 week
+    # Feature 12: log C1 price lagged 1 week
     log_price_lag1 = lag(log_real_price, 1),
     
-    # Feature 13: log price lagged 4 weeks
+    # Feature 13: log C1 price lagged 4 weeks
     log_price_lag4 = lag(log_real_price, 4)
   ) |>
   select(-year_month, -cpi)
@@ -64,11 +69,13 @@ price_features <- spot_weekly |>
 # ### STEP 3: ROLLING 20-DAY REALIZED VOLATILITY ###
 # ============================================================
 
-daily_returns <- spot_daily |>
-  filter(!is.na(spot_price)) |>
+# Compute from daily C1 returns rather than spot returns
+
+daily_returns <- ng_futures_daily |>
+  filter(!is.na(c1_price)) |>
   arrange(date) |>
   mutate(
-    log_return      = log(spot_price / lag(spot_price)),
+    log_return      = log(c1_price / lag(c1_price)),
     rolling_20d_vol = rollapply(log_return, width = 20,
                                 FUN = sd, align = "right",
                                 fill = NA, na.rm = TRUE),
@@ -104,3 +111,5 @@ price_features_final <- price_features |>
   arrange(week_ending)
 
 saveRDS(price_features_final, "data/features/price_features.rds")
+
+glimpse(price_features_final)

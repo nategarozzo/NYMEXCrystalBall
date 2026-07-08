@@ -118,5 +118,3 @@ macro_features <- tcu_weekly |>
   arrange(week_ending)
 
 saveRDS(macro_features, "data/features/macro_features.rds")
-
-glimpse(macro_features)
