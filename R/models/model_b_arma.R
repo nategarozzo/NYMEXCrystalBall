@@ -43,7 +43,7 @@ daily_ts <- ng_futures_daily |>
 
 fit_arma <- daily_ts |>
   model(ARIMA(log_price ~ 1 + pdq(1,0,1) + PDQ(0,0,0),
-              stepwise     = FALSE,
+              stepwise      = FALSE,
               approximation = FALSE))
 
 report(fit_arma)
@@ -68,25 +68,20 @@ future_dates <- seq.Date(
   mutate(trading_day = max(daily_ts$trading_day) + row_number()) |>
   select(trading_day, date)
 
-# Generate forecast and join correct calendar dates
+# Generate point forecast only — intervals handled empirically
+# in combine_forecasts.R
+
 forecast_b <- fit_arma |>
   forecast(h = 20) |>
-  hilo(level = 80) |>
   as_tibble() |>
-  mutate(
-    lower_80 = `80%`$lower,
-    upper_80 = `80%`$upper
-  ) |>
-  select(trading_day, forecast = .mean, lower_80, upper_80) |>
+  select(trading_day, forecast = .mean) |>
   left_join(future_dates, by = "trading_day") |>
   mutate(
     # Convert from log C1 price back to dollars
     forecast = exp(forecast),
-    lower_80 = exp(lower_80),
-    upper_80 = exp(upper_80),
     model    = "B"
   ) |>
-  select(model, date, forecast, lower_80, upper_80)
+  select(model, date, forecast)
 
 # ============================================================
 # ### STEP 4: SAVE OUTPUT ###
@@ -95,5 +90,3 @@ forecast_b <- fit_arma |>
 dir.create("data/forecasts", recursive = TRUE, showWarnings = FALSE)
 
 saveRDS(forecast_b, "data/forecasts/forecast_b.rds")
-
-print(forecast_b, n = 20)

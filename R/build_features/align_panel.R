@@ -39,7 +39,23 @@ master_panel <- master_spine |>
   left_join(weather_features, by = "week_ending") |>
   left_join(supply_features,  by = "week_ending") |>
   left_join(macro_features,   by = "week_ending") |>
-  arrange(week_ending)
+  # Forward-fill monthly variables with publication lags
+  # Ensures most recent available value carries forward
+  # rather than creating NAs at the tail of the panel
+  fill(
+    dry_production, log_dry_production,
+    total_exports,  log_total_exports,
+    lng_exports,    log_lng_exports,
+    tcu,
+    .direction = "down"
+  ) |>
+  arrange(week_ending) |>
+  mutate(
+    year            = year(week_ending),
+    month           = month(week_ending),
+    week_of_year    = week(week_ending),
+    in_model_window = if_else(week_ending >= as.Date("2017-01-01"), 1, 0)
+  )
 
 # ============================================================
 # ### STEP 3: ADD DERIVED IDENTIFIERS ###

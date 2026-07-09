@@ -84,7 +84,7 @@ summary(fit_bvar)
 forecast_bvar <- predict(
   fit_bvar,
   horizon    = 4,
-  conf_bands = c(0.1, 0.9)
+  conf_bands = c(0.5)
 )
 
 # Extract draws for log_real_price (variable 1)
@@ -98,7 +98,6 @@ forecast_draws <- forecast_bvar$fcast[, , 1]
 # log_real_price = log(c1_price / cpi * 100)
 # c1_price = exp(log_real_price) * cpi / 100
 # Note: log_real_price is now based on NYMEX C1 futures (NG=F)
-# rather than Henry Hub spot price
 
 current_cpi <- fredr_series_observations(
   series_id         = "CPIAUCSL",
@@ -113,23 +112,22 @@ current_cpi <- fredr_series_observations(
 cat("CPI used for back-transformation:", current_cpi, "\n")
 
 # ============================================================
-# ### STEP 6: BUILD FORECAST OBJECT ###
+# ### STEP 6: BUILD FORECAST OBJECT — POINT FORECAST ONLY ###
 # ============================================================
+
+# Confidence intervals handled empirically in combine_forecasts.R
+# Only median point forecast extracted here
 
 forecast_a <- tibble(
   horizon  = 1:4,
-  median   = apply(forecast_draws, 2, median),
-  lower_80 = apply(forecast_draws, 2, quantile, probs = 0.10),
-  upper_80 = apply(forecast_draws, 2, quantile, probs = 0.90)
+  median   = apply(forecast_draws, 2, median)
 ) |>
   mutate(
-    forecast = exp(median)   * current_cpi / 100,
-    lower_80 = exp(lower_80) * current_cpi / 100,
-    upper_80 = exp(upper_80) * current_cpi / 100,
+    forecast = exp(median) * current_cpi / 100,
     date     = max(model_data$week_ending) + (horizon * 7),
     model    = "A"
   ) |>
-  select(model, date, horizon, forecast, lower_80, upper_80)
+  select(model, date, horizon, forecast)
 
 # ============================================================
 # ### STEP 7: SAVE OUTPUT ###
@@ -138,3 +136,5 @@ forecast_a <- tibble(
 dir.create("data/forecasts", recursive = TRUE, showWarnings = FALSE)
 
 saveRDS(forecast_a, "data/forecasts/forecast_a.rds")
+
+print(forecast_a)

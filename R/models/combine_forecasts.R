@@ -1,18 +1,22 @@
 # ============================================================
 # combine_forecasts.R
 # Combines Model A, B, and C forecasts via weighted average
+# Confidence intervals computed empirically from historical C1 moves
+# Excludes 2022-2023 price spike period from interval estimation
 # Inputs: data/forecasts/forecast_a.rds
 #         data/forecasts/forecast_b.rds
 #         data/forecasts/forecast_c.rds
+#         data/raw/ng_futures_daily.rds
 # Output: data/forecasts/forecast_combined.rds
 # ============================================================
 
 library(tidyverse)
 library(lubridate)
 
-forecast_a <- readRDS("data/forecasts/forecast_a.rds")
-forecast_b <- readRDS("data/forecasts/forecast_b.rds")
-forecast_c <- readRDS("data/forecasts/forecast_c.rds")
+forecast_a       <- readRDS("data/forecasts/forecast_a.rds")
+forecast_b       <- readRDS("data/forecasts/forecast_b.rds")
+forecast_c       <- readRDS("data/forecasts/forecast_c.rds")
+ng_futures_daily <- readRDS("data/raw/ng_futures_daily.rds")
 
 # ============================================================
 # ### STEP 1: ALIGN MODEL B TO WEEKLY ###
@@ -26,21 +30,18 @@ forecast_b_weekly <- forecast_b |>
   mutate(horizon = row_number()) |>
   filter(horizon %in% c(5, 10, 15, 20)) |>
   mutate(horizon = horizon / 5) |>
-  select(model, horizon, forecast, lower_80, upper_80)
+  select(model, horizon, forecast)
 
 # ============================================================
 # ### STEP 2: ALIGN DATES ###
 # ============================================================
-
-# Use Model A dates as the reference since it has
-# the most current forecast origin after forward-fill fix
 
 reference_dates <- forecast_a |>
   select(horizon, date)
 
 forecast_b_weekly <- forecast_b_weekly |>
   left_join(reference_dates, by = "horizon") |>
-  select(model, date, horizon, forecast, lower_80, upper_80)
+  select(model, date, horizon, forecast)
 
 # ============================================================
 # ### STEP 3: DEFINE WEIGHTS ###
@@ -58,56 +59,88 @@ cat("  Model B (ARMA):", weights["B"], "\n")
 cat("  Model C (Futures):", weights["C"], "\n")
 
 # ============================================================
-# ### STEP 4: COMBINE FORECASTS ###
+# ### STEP 4: COMBINE POINT FORECASTS ###
 # ============================================================
 
-# Join all three models by horizon
-# Compute weighted average of point forecasts and interval bounds
-
 combined <- forecast_a |>
-  select(horizon, date,
-         forecast_a = forecast,
-         lower_a    = lower_80,
-         upper_a    = upper_80) |>
+  select(horizon, date, forecast_a = forecast) |>
   left_join(
-    forecast_b_weekly |>
-      select(horizon,
-             forecast_b = forecast,
-             lower_b    = lower_80,
-             upper_b    = upper_80),
+    forecast_b_weekly |> select(horizon, forecast_b = forecast),
     by = "horizon"
   ) |>
   left_join(
-    forecast_c |>
-      select(horizon,
-             forecast_c = forecast,
-             lower_c    = lower_80,
-             upper_c    = upper_80),
+    forecast_c |> select(horizon, forecast_c = forecast),
     by = "horizon"
   ) |>
   mutate(
-    # Combined point forecast
     forecast = weights["A"] * forecast_a +
       weights["B"] * forecast_b +
       weights["C"] * forecast_c,
-    
-    # Combined lower bound
-    lower_80 = weights["A"] * lower_a +
-      weights["B"] * lower_b +
-      weights["C"] * lower_c,
-    
-    # Combined upper bound
-    upper_80 = weights["A"] * upper_a +
-      weights["B"] * upper_b +
-      weights["C"] * upper_c,
-    
     model = "combined"
   ) |>
-  select(model, date, horizon, forecast, lower_80, upper_80,
+  select(model, date, horizon, forecast, forecast_a, forecast_b, forecast_c)
+
+# ============================================================
+# ### STEP 5: EMPIRICAL CONFIDENCE INTERVALS ###
+# ============================================================
+
+# Compute empirical quantiles of historical C1 price moves
+# Excludes 2022-2023 spike period which inflates tail uncertainty
+# Uses trading-day horizons: h=1 (5 days), h=2 (10), h=3 (15), h=4 (20)
+
+base_data <- ng_futures_daily |>
+  filter(
+    date >= as.Date("2017-01-01"),
+    !is.na(c1_price),
+    !(date >= as.Date("2022-01-01") & date <= as.Date("2023-06-30"))
+  ) |>
+  arrange(date)
+
+trading_day_horizons <- c(0, 1, 2, 3, 5, 10, 15, 20)
+
+get_quantile <- function(h, prob) {
+  if (h == 0) return(0)
+  base_data |>
+    mutate(move = lead(c1_price, h) - c1_price) |>
+    pull(move) |>
+    quantile(prob, na.rm = TRUE)
+}
+
+empirical_bands <- map_dfr(trading_day_horizons, function(h) {
+  tibble(
+    horizon_days = h,
+    p10          = get_quantile(h, 0.10),
+    p20          = get_quantile(h, 0.20),
+    p80          = get_quantile(h, 0.80),
+    p90          = get_quantile(h, 0.90)
+  )
+})
+
+# Map weekly horizons (h=1,2,3,4) to trading day equivalents
+# h=1 week = 5 trading days, h=2 = 10, h=3 = 15, h=4 = 20
+
+combined <- combined |>
+  mutate(
+    trading_days = horizon * 5,
+    lower_90     = forecast + approx(empirical_bands$horizon_days,
+                                     empirical_bands$p10,
+                                     xout = trading_days)$y,
+    lower_60     = forecast + approx(empirical_bands$horizon_days,
+                                     empirical_bands$p20,
+                                     xout = trading_days)$y,
+    upper_60     = forecast + approx(empirical_bands$horizon_days,
+                                     empirical_bands$p80,
+                                     xout = trading_days)$y,
+    upper_90     = forecast + approx(empirical_bands$horizon_days,
+                                     empirical_bands$p90,
+                                     xout = trading_days)$y
+  ) |>
+  select(model, date, horizon, forecast,
+         lower_90, lower_60, upper_60, upper_90,
          forecast_a, forecast_b, forecast_c)
 
 # ============================================================
-# ### STEP 5: SAVE OUTPUT ###
+# ### STEP 6: SAVE OUTPUT ###
 # ============================================================
 
 saveRDS(combined, "data/forecasts/forecast_combined.rds")

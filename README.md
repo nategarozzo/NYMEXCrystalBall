@@ -5,7 +5,7 @@
 ### Index
 
 |  |  |
-|------------------------------------|------------------------------------|
+|----|----|
 | `week_ending` | Friday date of each weekly observation |
 | `year` | Calendar year extracted from `week_ending` |
 | `month` | Calendar month (1–12) extracted from `week_ending` |
@@ -15,7 +15,7 @@
 ### Price
 
 |  |  |
-|------------------------------------|------------------------------------|
+|----|----|
 | `spot_price` | Henry Hub natural gas spot price in dollars per MMBtu |
 | `log_real_price` | Natural log of the Henry Hub spot price deflated by the U.S. CPI |
 | `log_price_lag1` | `log_real_price` from the prior week |
@@ -27,7 +27,7 @@
 ### Storage
 
 |  |  |
-|------------------------------------|------------------------------------|
+|----|----|
 | `total` | Total U.S. working gas in underground storage for the lower 48 states in Bcf |
 | `log_storage` | Natural log of total U.S. working gas in storage |
 | `storage_yoy` | Difference between current storage and storage for the same week one year prior in Bcf |
@@ -37,7 +37,7 @@
 ### Weather
 
 |  |  |
-|------------------------------------|------------------------------------|
+|----|----|
 | `hdd_pop` | Weekly sum of U.S. population-weighted heating degree days |
 | `cdd_pop` | Weekly sum of U.S. population-weighted cooling degree days |
 | `hdd_gas` | Weekly sum of U.S. utility gas customer-weighted heating degree days |

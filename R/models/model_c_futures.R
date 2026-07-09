@@ -37,58 +37,22 @@ F2 <- current_curve |> filter(contract == "C2") |> pull(price)
 # h=2: 2/4 of the way from C1 to C2
 # h=3: 3/4 of the way from C1 to C2
 # h=4: fully at C2 (prompt month has rolled to September)
+# Confidence intervals handled empirically in combine_forecasts.R
 
-forecast_path <- tibble(horizon = 1:4) |>
+forecast_c <- tibble(horizon = 1:4) |>
   mutate(
-    forecast = F1 + (horizon / 4) * (F2 - F1)
-  )
-
-# ============================================================
-# ### STEP 3: ESTIMATE HISTORICAL FORECAST ERRORS ###
-# ============================================================
-
-# For each week in historical data compute what Model C
-# would have forecast vs what C1 actually did h weeks later
-# Standard deviation of those errors gives sigma at each horizon
-
-historical_errors <- weekly_curve |>
-  filter(!is.na(contract1), !is.na(contract2)) |>
-  arrange(date)
-
-horizon_errors <- map_dfr(1:4, function(h) {
-  historical_errors |>
-    mutate(
-      forecast_h = contract1 + (h / 4) * (contract2 - contract1),
-      actual_h   = lead(contract1, h),
-      error_h    = actual_h - forecast_h
-    ) |>
-    filter(!is.na(error_h)) |>
-    summarise(
-      horizon = h,
-      sigma_h = sd(error_h, na.rm = TRUE)
-    )
-})
-
-horizon_errors
-
-# ============================================================
-# ### STEP 4: BUILD FORECAST OBJECT WITH CONFIDENCE BAND ###
-# ============================================================
-
-forecast_c <- forecast_path |>
-  left_join(horizon_errors, by = "horizon") |>
-  mutate(
-    lower_80 = forecast - 1.282 * sigma_h,
-    upper_80 = forecast + 1.282 * sigma_h,
+    forecast = F1 + (horizon / 4) * (F2 - F1),
     date     = current_curve$as_of[1] + (horizon * 7),
     model    = "C"
   ) |>
-  select(model, date, horizon, forecast, lower_80, upper_80)
+  select(model, date, horizon, forecast)
 
 # ============================================================
-# ### STEP 5: SAVE OUTPUT ###
+# ### STEP 3: SAVE OUTPUT ###
 # ============================================================
 
 dir.create("data/forecasts", recursive = TRUE, showWarnings = FALSE)
 
 saveRDS(forecast_c, "data/forecasts/forecast_c.rds")
+
+print(forecast_c)
