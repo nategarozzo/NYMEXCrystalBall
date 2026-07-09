@@ -27,21 +27,36 @@ current_curve <- tibble(
 
 F1 <- current_curve |> filter(contract == "C1") |> pull(price)
 F2 <- current_curve |> filter(contract == "C2") |> pull(price)
+F3 <- current_curve |> filter(contract == "C3") |> pull(price)
+F4 <- current_curve |> filter(contract == "C4") |> pull(price)
 
 # ============================================================
 # ### STEP 2: GENERATE WEEKLY FORECAST PATH ###
 # ============================================================
 
-# Linear interpolation from C1 today to C2 at h=4 weeks
-# h=1: 1/4 of the way from C1 to C2
-# h=2: 2/4 of the way from C1 to C2
-# h=3: 3/4 of the way from C1 to C2
-# h=4: fully at C2 (prompt month has rolled to September)
-# Confidence intervals handled empirically in combine_forecasts.R
+# Map each weekly horizon to position along the futures curve
+# Weeks 1-4:  interpolate C1 → C2
+# Weeks 5-8:  interpolate C2 → C3
+# Weeks 9-12: interpolate C3 → C4
+# Beyond 12:  hold at C4 (no further curve data)
 
-forecast_c <- tibble(horizon = 1:4) |>
+# n_weeks set in run_forecast.R
+
+get_curve_price <- function(h) {
+  if (h <= 4) {
+    F1 + (h / 4) * (F2 - F1)
+  } else if (h <= 8) {
+    F2 + ((h - 4) / 4) * (F3 - F2)
+  } else if (h <= 12) {
+    F3 + ((h - 8) / 4) * (F4 - F3)
+  } else {
+    F4  # hold at C4 beyond 12 weeks
+  }
+}
+
+forecast_c <- tibble(horizon = 1:n_weeks) |>
   mutate(
-    forecast = F1 + (horizon / 4) * (F2 - F1),
+    forecast = map_dbl(horizon, get_curve_price),
     date     = current_curve$as_of[1] + (horizon * 7),
     model    = "C"
   ) |>

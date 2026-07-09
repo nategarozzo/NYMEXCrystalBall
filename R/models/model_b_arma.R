@@ -58,13 +58,13 @@ report(fit_arma)
 future_dates <- seq.Date(
   from       = max(daily_ts$date) + 1,
   by         = "day",
-  length.out = 40
+  length.out = N * 3
 ) |>
   as_tibble() |>
   rename(date = value) |>
   mutate(day = wday(date, label = TRUE)) |>
   filter(!day %in% c("Sat", "Sun")) |>
-  head(20) |>
+  head(N) |>
   mutate(trading_day = max(daily_ts$trading_day) + row_number()) |>
   select(trading_day, date)
 
@@ -72,7 +72,7 @@ future_dates <- seq.Date(
 # in combine_forecasts.R
 
 forecast_b <- fit_arma |>
-  forecast(h = 20) |>
+  forecast(h = N) |>
   as_tibble() |>
   select(trading_day, forecast = .mean) |>
   left_join(future_dates, by = "trading_day") |>
