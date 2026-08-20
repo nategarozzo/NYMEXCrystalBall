@@ -16,4 +16,4 @@ Model weights are dynamically shifted depending on the horizon, with the futures
 
 Performance is the strongest in summer and shoulder months at horizons of 30-45 days, while winter performance is limited by weather uncertainty.
 
-**For a full description of how the model works, including performance metrics, access the writeup: [https://nategarozzo.github.io/NYMEXCrystalBall/](https://nategarozzo.github.io/NYMEXCrystalBall/).**
+**For a full description of how the model works, including performance metrics, access the writeup: [https://nategarozzo.github.io/NYMEXCrystalBall/](https://nategarozzo.github.io/NYMEXCrystalBall/)**
