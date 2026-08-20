@@ -1,6 +1,6 @@
 # NYMEXCrystalBall
 
-*A forecasting tool for the prompt-month Henry Hub natural gas futures contract. Generates price path forecasts between 5 and 45 days in advance with 60% and 90% confidence intervals.*
+*A forecasting tool for the (rolling) prompt-month Henry Hub natural gas futures contract. Generates price path forecasts between 5 and 45 days in advance with 60% and 90% confidence intervals.*
 
 ## Overview
 
